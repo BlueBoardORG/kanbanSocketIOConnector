@@ -16,6 +16,9 @@ const app = express();
 MongoClient.connect(process.env.MONGODB_URL).then(client => {
     const db = client.db(process.env.MONGODB_NAME);
     
+    app.get("/isalive", (req,res,next)=>{
+        res.send("alive");
+    })
     app.use(helmet());
     app.use(logger("tiny"));
     app.use(compression());
@@ -64,9 +67,9 @@ MongoClient.connect(process.env.MONGODB_URL).then(client => {
 
 
 function sendChangeMessage(users, changed_by){
-    let userSet = new Set(users);
+    let userSet = new Set(users.map(user => user.id));
     users = [...userSet];
-    users = users.filter(user => user!==changed_by);
+    users = users.filter(user => user!== changed_by);
     users.forEach(user=>{
         if(userSockets[user]){
             userSockets[user].emit("change");
