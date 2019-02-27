@@ -16,6 +16,9 @@ const app = express();
 MongoClient.connect(process.env.MONGODB_URL).then(client => {
     const db = client.db(process.env.MONGODB_NAME);
     
+    app.get("/isalive", (req,res,next)=>{
+        res.send("alive");
+    })
     app.use(helmet());
     app.use(logger("tiny"));
     app.use(compression());
