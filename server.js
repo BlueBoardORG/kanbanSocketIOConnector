@@ -53,15 +53,21 @@ MongoClient.connect(process.env.MONGODB_URL).then(client => {
     const boards = db.collection("boards");
     let boardCursor = boards.watch();
     boardCursor.on("change", ({fullDocument})=>{
-        let {users, changed_by} = fullDocument;
-        sendChangeMessage(users, changed_by);
+        if(fullDocument){
+            let {users, changed_by} = fullDocument;
+            sendChangeMessage(users, changed_by);
+        }
     })
 
     const notifications = db.collection("notifications");
     let notifCursor = notifications.watch();
     notifCursor.on("change", ({fullDocument})=>{
-        let {userId} = fullDocument;
-        sendNotification(userId)
+        if(fullDocument){
+            let {userId} = fullDocument;
+            if(userId){
+                sendNotification(userId,fullDocument)
+            }
+        }
     })
 });
 
@@ -77,9 +83,9 @@ function sendChangeMessage(users, changed_by){
     })
 }
 
-function sendNotification(user){
+function sendNotification(user,notification){
     if(userSockets[user]){
-        userSockets[user].emit("notification");
+        userSockets[user].emit("notification",notification);
     }
 }
 
