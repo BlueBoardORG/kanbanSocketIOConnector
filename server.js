@@ -79,7 +79,7 @@ function sendChangeMessage(users, changed_by){
 
 function sendNotification(user){
     if(userSockets[user]){
-        userSockets[user].emit("change");
+        userSockets[user].emit("notification");
     }
 }
 
