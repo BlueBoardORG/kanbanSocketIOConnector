@@ -50,12 +50,13 @@ MongoClient.connect(process.env.MONGODB_URL).then(client => {
         })
     })
 
+    const history = db.collection("history");
     const boards = db.collection("boards");
-    let boardCursor = boards.watch();
-    boardCursor.on("change", ({fullDocument})=>{
+    let historyCursor = history.watch();
+    historyCursor.on("change", ({fullDocument})=>{
         if(fullDocument){
-            let {users, changed_by} = fullDocument;
-            sendChangeMessage(users, changed_by);
+            let {userId, action, payload,boardId} = fullDocument;
+            sendChangeMessage(userId, action, payload, boardId,boards);
         }
     })
 
@@ -72,15 +73,20 @@ MongoClient.connect(process.env.MONGODB_URL).then(client => {
 });
 
 
-function sendChangeMessage(users, changed_by){
-    let userSet = new Set(users.map(user => user.id));
-    users = [...userSet];
-    users = users.filter(user => user!== changed_by);
-    users.forEach(user=>{
-        if(userSockets[user]){
-            userSockets[user].emit("change");
+function sendChangeMessage(userId, action,payload,boardId,boards){
+    boards.findOne({_id: boardId}).then(board=>{
+        if(board){
+            let {users} = board;
+            let userSet = new Set(users.map(user => user.id));
+            users = [...userSet];
+            users = users.filter(user => user!== userId);
+            users.forEach(user=>{
+                if(userSockets[user]){
+                    userSockets[user].emit("change", {action,payload});
+                }
+            })
         }
-    })
+    }).catch(err=> console.error(err));
 }
 
 function sendNotification(user,notification){
