@@ -56,7 +56,7 @@ MongoClient.connect(process.env.MONGODB_URL).then(client => {
     historyCursor.on("change", ({fullDocument})=>{
         if(fullDocument){
             let {userId, action, payload,boardId} = fullDocument;
-            sendChangeMessage(userId, action, payload, boardId,boards);
+            sendChangeAndHistoryMessage(userId, action, payload, boardId,boards);
         }
     })
 
@@ -72,13 +72,21 @@ MongoClient.connect(process.env.MONGODB_URL).then(client => {
     })
 });
 
+function sendHistoryMessage(users,action,boardId,userId){
+    users.forEach(user=>{
+        if(userSockets[user]){
+            userSockets[user].emit("historyItem", {action,boardId,userId});
+        }
+    })
+}
 
-function sendChangeMessage(userId, action,payload,boardId,boards){
+function sendChangeAndHistoryMessage(userId, action,payload,boardId,boards){
     boards.findOne({_id: boardId}).then(board=>{
         if(board){
             let {users} = board;
             let userSet = new Set(users.map(user => user.id));
             users = [...userSet];
+            sendHistoryMessage(users,action,boardId,userId);
             users = users.filter(user => user!== userId);
             users.forEach(user=>{
                 if(userSockets[user]){
