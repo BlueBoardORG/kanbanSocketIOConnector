@@ -35,17 +35,22 @@ MongoClient.connect(process.env.MONGODB_URL).then(client => {
     io.on("connection", socket=>{
         socket.emit("connected");
 
-        socket.on("userDetails", ({_id: userID})=>{
-            userSockets[userID] = socket;
+        socket.on("userDetails", ({user})=>{
+            const {_id: userID } = user;
+            if(!(userID in userSockets))
+                userSockets[userID] = [];
+            const doesSocketExists = userSockets[userID].filter(sock => sock.id === socket.id).length;
+            if (doesSocketExists === 0)
+                userSockets[userID].push(socket);
         })
 
         socket.on("disconnect", ()=>{
             let keys = Object.keys(userSockets);
             for(let i=0; i< keys.length; i++){
-                if(userSockets[keys[i]].id === socket.id){
-                    delete userSockets[keys[i]];
+                const original_length = userSockets[keys[i]].length;
+                userSockets[keys[i]] = userSockets[keys[i]].filter(sock => sock.id !== socket.id);
+                if(original_length !== userSockets[keys[i]].length)
                     break;
-                }
             }
         })
     })
@@ -72,10 +77,13 @@ MongoClient.connect(process.env.MONGODB_URL).then(client => {
     })
 });
 
-function sendHistoryMessage(users,action,boardId,userId){
+function sendHistoryMessage(users,action,boardId,userId, socketId){
     users.forEach(user=>{
-        if(userSockets[user]){
-            userSockets[user].emit("historyItem", {action,boardId,userId});
+        if(userSockets[user] && userSockets[user].length > 0){
+            userSockets[user].forEach(sock=> {
+                if(sock.id !== socketId)
+                    sock.emit("historyItem", {action,boardId,userId});
+            })
         }
     })
 }
@@ -84,13 +92,16 @@ function sendChangeAndHistoryMessage(userId, action,payload,boardId,boards){
     boards.findOne({_id: boardId}).then(board=>{
         if(board){
             let {users} = board;
+            const {last_socket: socketId}= board;
             let userSet = new Set(users.map(user => user.id));
             users = [...userSet];
-            sendHistoryMessage(users,action,boardId,userId);
-            users = users.filter(user => user!== userId);
+            sendHistoryMessage(users,action,boardId,userId, socketId);
             users.forEach(user=>{
-                if(userSockets[user]){
-                    userSockets[user].emit("change", {action,payload});
+                if(userSockets[user] && userSockets[user].length > 0){
+                    userSockets[user].forEach(sock => {
+                        if(sock.id !== socketId)
+                            sock.emit("change", {action,payload});
+                    })
                 }
             })
         }
@@ -98,8 +109,10 @@ function sendChangeAndHistoryMessage(userId, action,payload,boardId,boards){
 }
 
 function sendNotification(user,notification){
-    if(userSockets[user]){
-        userSockets[user].emit("notification",notification);
+    if(userSockets[user] && userSockets[user].length > 0){
+        userSockets[user].forEach(sock =>{
+            sock.emit("notification",notification);
+        })
     }
 }
 
