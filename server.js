@@ -60,8 +60,8 @@ MongoClient.connect(process.env.MONGODB_URL).then(client => {
     let historyCursor = history.watch();
     historyCursor.on("change", ({fullDocument})=>{
         if(fullDocument){
-            let {userId, action, payload,boardId} = fullDocument;
-            sendChangeAndHistoryMessage(userId, action, payload, boardId,boards);
+            let {userId, action, payload,boardId, socketId} = fullDocument;
+            sendChangeAndHistoryMessage(userId, action, payload, boardId,boards,socketId);
         }
     })
 
@@ -77,25 +77,23 @@ MongoClient.connect(process.env.MONGODB_URL).then(client => {
     })
 });
 
-function sendHistoryMessage(users,action,boardId,userId, socketId){
+function sendHistoryMessage(users,action,boardId,userId){
     users.forEach(user=>{
         if(userSockets[user] && userSockets[user].length > 0){
             userSockets[user].forEach(sock=> {
-                if(sock.id !== socketId)
-                    sock.emit("historyItem", {action,boardId,userId});
+                sock.emit("historyItem", {action,boardId,userId});
             })
         }
     })
 }
 
-function sendChangeAndHistoryMessage(userId, action,payload,boardId,boards){
+function sendChangeAndHistoryMessage(userId, action,payload,boardId,boards,socketId){
     boards.findOne({_id: boardId}).then(board=>{
         if(board){
             let {users} = board;
-            const {last_socket: socketId}= board;
             let userSet = new Set(users.map(user => user.id));
             users = [...userSet];
-            sendHistoryMessage(users,action,boardId,userId, socketId);
+            sendHistoryMessage(users,action,boardId,userId);
             users.forEach(user=>{
                 if(userSockets[user] && userSockets[user].length > 0){
                     userSockets[user].forEach(sock => {
