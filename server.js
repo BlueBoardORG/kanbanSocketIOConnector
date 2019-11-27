@@ -15,8 +15,8 @@ const app = express();
 
 MongoClient.connect(process.env.MONGODB_URL).then(client => {
     const db = client.db(process.env.MONGODB_NAME);
-    
-    app.get("/isalive", (req,res,next)=>{
+
+    app.get("/isalive", (req, res, next) => {
         res.send("alive");
     })
     app.use(helmet());
@@ -32,24 +32,24 @@ MongoClient.connect(process.env.MONGODB_URL).then(client => {
 
     const io = socketIO(server);
 
-    io.on("connection", socket=>{
+    io.on("connection", socket => {
         socket.emit("connected");
 
-        socket.on("userDetails", ({user})=>{
-            const {_id: userID } = user;
-            if(!(userID in userSockets))
+        socket.on("userDetails", ({ user }) => {
+            const { _id: userID } = user;
+            if (!(userID in userSockets))
                 userSockets[userID] = [];
             const doesSocketExists = userSockets[userID].filter(sock => sock.id === socket.id).length;
             if (doesSocketExists === 0)
                 userSockets[userID].push(socket);
         })
 
-        socket.on("disconnect", ()=>{
+        socket.on("disconnect", () => {
             let keys = Object.keys(userSockets);
-            for(let i=0; i< keys.length; i++){
+            for (let i = 0; i < keys.length; i++) {
                 const original_length = userSockets[keys[i]].length;
                 userSockets[keys[i]] = userSockets[keys[i]].filter(sock => sock.id !== socket.id);
-                if(original_length !== userSockets[keys[i]].length)
+                if (original_length !== userSockets[keys[i]].length)
                     break;
             }
         })
@@ -58,58 +58,58 @@ MongoClient.connect(process.env.MONGODB_URL).then(client => {
     const history = db.collection("history");
     const boards = db.collection("boards");
     let historyCursor = history.watch();
-    historyCursor.on("change", ({fullDocument})=>{
-        if(fullDocument){
-            let {userId, action, payload,boardId, socketId} = fullDocument;
-            sendChangeAndHistoryMessage(userId, action, payload, boardId,boards,socketId);
+    historyCursor.on("change", ({ fullDocument }) => {
+        if (fullDocument) {
+            let { userId, action, payload, boardId, socketId, date } = fullDocument;
+            sendChangeAndHistoryMessage(userId, action, payload, boardId, boards, socketId, date);
         }
     })
 
     const notifications = db.collection("notifications");
     let notifCursor = notifications.watch();
-    notifCursor.on("change", ({fullDocument})=>{
-        if(fullDocument){
-            let {userId} = fullDocument;
-            if(userId){
-                sendNotification(userId,fullDocument)
+    notifCursor.on("change", ({ fullDocument }) => {
+        if (fullDocument) {
+            let { userId } = fullDocument;
+            if (userId) {
+                sendNotification(userId, fullDocument)
             }
         }
     })
 });
 
-function sendHistoryMessage(users,action,boardId,userId){
-    users.forEach(user=>{
-        if(userSockets[user] && userSockets[user].length > 0){
-            userSockets[user].forEach(sock=> {
-                sock.emit("historyItem", {action,boardId,userId});
+function sendHistoryMessage(users, action, boardId, userId, date) {
+    users.forEach(user => {
+        if (userSockets[user] && userSockets[user].length > 0) {
+            userSockets[user].forEach(sock => {
+                sock.emit("historyItem", { action, boardId, userId, date });
             })
         }
     })
 }
 
-function sendChangeAndHistoryMessage(userId, action,payload,boardId,boards,socketId){
-    boards.findOne({_id: boardId}).then(board=>{
-        if(board){
-            let {users} = board;
+function sendChangeAndHistoryMessage(userId, action, payload, boardId, boards, socketId, date) {
+    boards.findOne({ _id: boardId }).then(board => {
+        if (board) {
+            let { users } = board;
             let userSet = new Set(users.map(user => user.id));
             users = [...userSet];
-            sendHistoryMessage(users,action,boardId,userId);
-            users.forEach(user=>{
-                if(userSockets[user] && userSockets[user].length > 0){
+            sendHistoryMessage(users, action, boardId, userId, date);
+            users.forEach(user => {
+                if (userSockets[user] && userSockets[user].length > 0) {
                     userSockets[user].forEach(sock => {
-                        if(sock.id !== socketId)
-                            sock.emit("change", {action,payload});
+                        if (sock.id !== socketId)
+                            sock.emit("change", { action, payload });
                     })
                 }
             })
         }
-    }).catch(err=> console.error(err));
+    }).catch(err => console.error(err));
 }
 
-function sendNotification(user,notification){
-    if(userSockets[user] && userSockets[user].length > 0){
-        userSockets[user].forEach(sock =>{
-            sock.emit("notification",notification);
+function sendNotification(user, notification) {
+    if (userSockets[user] && userSockets[user].length > 0) {
+        userSockets[user].forEach(sock => {
+            sock.emit("notification", notification);
         })
     }
 }
