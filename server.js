@@ -160,11 +160,11 @@ function shouldSendNotification(userId, action, watchMode, skipUserId) {
         "CHANGE_USER_WATCH"
     ];
 
-    if (watchMode === "Watching" && !watchingFunctions.includes(action.type)) {
+    if (watchMode === "Watching" && watchingFunctions.includes(action)) {
         return true;
     }
 
-    if (watchMode === "Not watching" && notWatchingFunctions.includes(action.type)) {
+    if (watchMode === "Not watching" && notWatchingFunctions.includes(action)) {
         return true;
     }
 
