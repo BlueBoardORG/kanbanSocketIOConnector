@@ -92,7 +92,7 @@ function sendHistoryMessage(users, action, boardId, userId, date) {
 }
 
 function sendChangeAndHistoryMessage(userId, action, payload, boardId, socketId, date) {
-    boards.findOne({ _id: boardId }).then(board => {
+    boardId ? boards.findOne({ _id: boardId }).then(board => {
         if (board) {
             let { users } = board;
             let userSet = new Set(users.map(user => user.id));
@@ -107,7 +107,7 @@ function sendChangeAndHistoryMessage(userId, action, payload, boardId, socketId,
                 }
             })
         }
-    }).catch(err => console.error(err));
+    }).catch(err => console.error(err)): null; 
 }
 
 function sendNotification(user, notification) {
@@ -149,7 +149,6 @@ function shouldSendNotification(userId, action, watchMode, skipUserId) {
 
     const watchingFunctions = [
         "TOGGLE_SOCKET_CONNECTION",
-        "MOVE_CARD",
         "ENTER_AS_GUEST",
         "UPDATE_FILTER",
         "CHANGE_CARD_FILTER",
@@ -160,7 +159,7 @@ function shouldSendNotification(userId, action, watchMode, skipUserId) {
         "CHANGE_USER_WATCH"
     ];
 
-    if (watchMode === "Watching" && watchingFunctions.includes(action)) {
+    if (watchMode === "Watching" && !watchingFunctions.includes(action)) {
         return true;
     }
 
