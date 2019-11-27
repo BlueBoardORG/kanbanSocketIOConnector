@@ -127,7 +127,7 @@ async function createNotifications(userId, action, boardId) {
     }
     const { users: boardUsers, title } = board;
     boardUsers.forEach(user => {
-        shouldSendNotification(action, user.watch) ? createNotification({ action, boardId, title, from: name, wasSeen: false, notifTo: user.id }) : null;
+        shouldSendNotification(user.id, action, user.watch, userId) ? createNotification({ action, boardId, title, from: name, wasSeen: false, notifTo: user.id }) : null;
     })
 }
 
@@ -135,9 +135,9 @@ async function createNotification(notification) {
     await notifications.insertOne(notification);
 }
 
-function shouldSendNotification(action, watchMode) {
+function shouldSendNotification(userId, action, watchMode, skipUserId) {
 
-    if (watchMode === "Ignoring")
+    if (watchMode === "Ignoring" || userId === skipUserId)
         return false;
 
     const notWatchingFunctions = [
