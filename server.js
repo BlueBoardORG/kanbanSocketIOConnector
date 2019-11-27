@@ -13,8 +13,14 @@ dotenv.config();
 
 const app = express();
 
+let db, notifications, users, boards, history;
+
 MongoClient.connect(process.env.MONGODB_URL).then(client => {
-    const db = client.db(process.env.MONGODB_NAME);
+    db = client.db(process.env.MONGODB_NAME);
+    history = db.collection("history");
+    boards = db.collection("boards");
+    notifications = db.collection("notifications");
+    users = db.collection("users");
 
     app.get("/isalive", (req, res, next) => {
         res.send("alive");
@@ -55,23 +61,21 @@ MongoClient.connect(process.env.MONGODB_URL).then(client => {
         })
     })
 
-    const history = db.collection("history");
-    const boards = db.collection("boards");
     let historyCursor = history.watch();
     historyCursor.on("change", ({ fullDocument }) => {
         if (fullDocument) {
             let { userId, action, payload, boardId, socketId, date } = fullDocument;
-            sendChangeAndHistoryMessage(userId, action, payload, boardId, boards, socketId, date);
+            sendChangeAndHistoryMessage(userId, action, payload, boardId, socketId, date);
+            createNotifications(userId, action, boardId);
         }
     })
 
-    const notifications = db.collection("notifications");
     let notifCursor = notifications.watch();
     notifCursor.on("change", ({ fullDocument }) => {
         if (fullDocument) {
-            let { userId } = fullDocument;
-            if (userId) {
-                sendNotification(userId, fullDocument)
+            let { notifTo } = fullDocument;
+            if (notifTo) {
+                sendNotification(notifTo, fullDocument)
             }
         }
     })
@@ -87,7 +91,7 @@ function sendHistoryMessage(users, action, boardId, userId, date) {
     })
 }
 
-function sendChangeAndHistoryMessage(userId, action, payload, boardId, boards, socketId, date) {
+function sendChangeAndHistoryMessage(userId, action, payload, boardId, socketId, date) {
     boards.findOne({ _id: boardId }).then(board => {
         if (board) {
             let { users } = board;
@@ -112,5 +116,58 @@ function sendNotification(user, notification) {
             sock.emit("notification", notification);
         })
     }
+}
+
+async function createNotifications(userId, action, boardId) {
+    const board = await boards.findOne({ _id: boardId });
+    let { name } = await users.findOne({ _id: userId });
+    const { firstName, lastName } = name;
+    if (firstName || lastName) {
+        name = `${firstName} ${lastName}`;
+    }
+    const { users: boardUsers, title } = board;
+    boardUsers.forEach(user => {
+        shouldSendNotification(action, user.watch) ? createNotification({ action, boardId, title, from: name, wasSeen: false, notifTo: user.id }) : null;
+    })
+}
+
+async function createNotification(notification) {
+    await notifications.insertOne(notification);
+}
+
+function shouldSendNotification(action, watchMode) {
+
+    if (watchMode === "Ignoring")
+        return false;
+
+    const notWatchingFunctions = [
+        "UPDATE_ASSIGNED_USER",
+        "ADD_USER",
+        "REMOVE_USER",
+        "CHANGE_USER_ROLE"
+    ];
+
+    const watchingFunctions = [
+        "TOGGLE_SOCKET_CONNECTION",
+        "MOVE_CARD",
+        "ENTER_AS_GUEST",
+        "UPDATE_FILTER",
+        "CHANGE_CARD_FILTER",
+        "SET_CURRENT_CARD",
+        "PUT_BOARD_ID_IN_REDUX",
+        "ADD_BOARD",
+        "LOAD_BOARD_USERS_DATA",
+        "CHANGE_USER_WATCH"
+    ];
+
+    if (watchMode === "Watching" && !watchingFunctions.includes(action.type)) {
+        return true;
+    }
+
+    if (watchMode === "Not watching" && notWatchingFunctions.includes(action.type)) {
+        return true;
+    }
+
+    return false;
 }
 
